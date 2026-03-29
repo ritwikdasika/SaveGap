@@ -1,0 +1,486 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SaveGap Preview</title>
+  <script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+</head>
+<body>
+  <div id="root"></div>
+  <script type="text/babel">
+    const { useState, createContext, useContext } = React;
+
+    // ─── THEME ───────────────────────────────────────────────────────────────
+    const ThemeContext = createContext(null);
+
+    const darkTheme = {
+      bg: "#0a0a0a", surface: "#141414", card: "#1a1a1a", border: "#2a2a2a",
+      accent: "#b5ff47", accentDim: "#8acc2e", accentSoft: "rgba(181,255,71,0.1)",
+      red: "#ff4f4f", redSoft: "rgba(255,79,79,0.1)",
+      amber: "#ffb347", amberSoft: "rgba(255,179,71,0.1)",
+      blue: "#47b5ff", blueSoft: "rgba(71,181,255,0.1)",
+      text: "#f0f0f0", muted: "#666", subtle: "#333",
+      navBg: "rgba(10,10,10,0.95)", isDark: true,
+    };
+
+    const lightTheme = {
+      bg: "#f0f2f5", surface: "#e8eaed", card: "#ffffff", border: "#dde1e7",
+      accent: "#5a9600", accentDim: "#477800", accentSoft: "rgba(90,150,0,0.1)",
+      red: "#dc2626", redSoft: "rgba(220,38,38,0.1)",
+      amber: "#c97a00", amberSoft: "rgba(201,122,0,0.1)",
+      blue: "#1d6fb8", blueSoft: "rgba(29,111,184,0.1)",
+      text: "#111827", muted: "#6b7280", subtle: "#d1d5db",
+      navBg: "rgba(240,242,245,0.95)", isDark: false,
+    };
+
+    const categories = {
+      grocery:       { label: "Groceries",     icon: "🛒", color: "#1d6fb8" },
+      dining:        { label: "Dining",         icon: "🍕", color: "#c97a00" },
+      shopping:      { label: "Shopping",       icon: "🛍️", color: "#9333ea" },
+      entertainment: { label: "Entertainment",  icon: "🎮", color: "#e11d48" },
+      transport:     { label: "Transport",      icon: "🚗", color: "#059669" },
+      non_essential: { label: "Non-Essential",  icon: "✨", color: "#7c9e00" },
+    };
+
+    const initialBudgets = {
+      grocery:       { limit: 400, spent: 212 },
+      dining:        { limit: 150, spent: 118 },
+      shopping:      { limit: 200, spent: 87  },
+      entertainment: { limit: 100, spent: 60  },
+      transport:     { limit: 120, spent: 44  },
+      non_essential: { limit: 80,  spent: 55  },
+    };
+
+    const mockTransactions = [
+      { id: 1, item: "Whole Foods haul",  store: "Whole Foods", amount: 67.43, cat: "grocery",       date: "Today"     },
+      { id: 2, item: "Domino's delivery", store: "Domino's",    amount: 28.5,  cat: "dining",        date: "Today"     },
+      { id: 3, item: "Nike Air Force 1",  store: "Nike.com",    amount: 110,   cat: "shopping",      date: "Yesterday" },
+      { id: 4, item: "Spotify Premium",   store: "Spotify",     amount: 11.99, cat: "entertainment", date: "Mar 25"    },
+      { id: 5, item: "Uber ride",         store: "Uber",        amount: 14.2,  cat: "transport",     date: "Mar 24"    },
+      { id: 6, item: "Scented candle",    store: "Target",      amount: 22,    cat: "non_essential", date: "Mar 23"    },
+    ];
+
+    const scanScenarios = [
+      {
+        item: "Apple iPhone 16 Pro", price: 999, category: "shopping", image: "📱",
+        advice: "Yikes. That's basically your entire monthly shopping budget in one swipe. Also… you bought AirPods last month. Your ears are already living their best life.",
+        verdict: "skip",
+        alternatives: [
+          { name: "iPhone 15 Pro (refurb)", price: 699, where: "Apple Certified" },
+          { name: "Google Pixel 9",         price: 799, where: "Best Buy"        },
+          { name: "Samsung Galaxy S24",     price: 749, where: "Amazon"          },
+        ],
+      },
+      {
+        item: "Stanley Tumbler 40oz", price: 45, category: "non_essential", image: "🥤",
+        advice: "You've spent $55 on non-essentials this month and your limit is $80. This leaves you $25 cushion. It's not catastrophic... but it IS your 3rd water bottle. Hydration icon era? Your call.",
+        verdict: "maybe",
+        alternatives: [
+          { name: "Hydro Flask 40oz",      price: 32, where: "REI"    },
+          { name: "Simple Modern Tumbler", price: 18, where: "Amazon" },
+        ],
+      },
+      {
+        item: "Organic Avocados (4-pack)", price: 6.49, category: "grocery", image: "🥑",
+        advice: "Grocery budget looking healthy — you've got $188 left this month. Avocado secured. No notes. Get the guac too.",
+        verdict: "buy",
+        alternatives: [],
+      },
+    ];
+
+    const patternAlerts = [
+      { id: 1, icon: "🍕", severity: "warn",  title: "Domino's streak: 4 weeks running",  body: "You're spending ~$28/week on Domino's. That's $112/mo on pizza alone. Your dining budget is 79% gone with 12 days left in March." },
+      { id: 2, icon: "📦", severity: "alert", title: "Amazon impulse spike",               body: "You've placed 6 Amazon orders in the last 10 days, vs. your usual 2/month average. $143 in non-essential orders. Everything OK? 👀" },
+      { id: 3, icon: "✅", severity: "good",  title: "Transport budget: crushing it",      body: "Only $44 spent on transport this month vs $120 budget. You're walking more and it's showing. Proud of you, genuinely." },
+    ];
+
+    // ─── TOGGLE ──────────────────────────────────────────────────────────────
+    function ThemeToggle({ darkMode, onToggle }) {
+      const theme = useContext(ThemeContext);
+      return (
+        <button onClick={onToggle} title={darkMode ? "Switch to light mode" : "Switch to dark mode"} style={{
+          background: theme.card, border: `1px solid ${theme.border}`,
+          borderRadius: 99, width: 44, height: 26, cursor: "pointer",
+          display: "flex", alignItems: "center", padding: "3px 4px",
+          transition: "background 0.3s, border-color 0.3s", flexShrink: 0,
+        }}>
+          <div style={{
+            width: 18, height: 18, borderRadius: "50%", background: theme.accent,
+            transform: darkMode ? "translateX(0px)" : "translateX(18px)",
+            transition: "transform 0.25s ease",
+            display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10,
+          }}>
+            {darkMode ? "🌙" : "☀️"}
+          </div>
+        </button>
+      );
+    }
+
+    // ─── COMPONENTS ──────────────────────────────────────────────────────────
+    function Logo({ darkMode, onToggle }) {
+      const theme = useContext(ThemeContext);
+      return (
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <div style={{ width: 32, height: 32, borderRadius: 10, background: theme.accent, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, fontWeight: 900, color: "#000" }}>S</div>
+            <span style={{ fontFamily: "'Space Mono', monospace", fontWeight: 700, fontSize: 18, color: theme.text, letterSpacing: -0.5 }}>
+              Save<span style={{ color: theme.accent }}>Gap</span>
+            </span>
+          </div>
+          <ThemeToggle darkMode={darkMode} onToggle={onToggle} />
+        </div>
+      );
+    }
+
+    function BottomNav({ active, setActive }) {
+      const theme = useContext(ThemeContext);
+      const tabs = [
+        { id: "dashboard", icon: "◈", label: "Budget"   },
+        { id: "scan",      icon: "⊕", label: "Scan"     },
+        { id: "history",   icon: "≡", label: "History"  },
+        { id: "insights",  icon: "◉", label: "Insights" },
+      ];
+      return (
+        <div style={{
+          position: "fixed", bottom: 0, left: "50%", transform: "translateX(-50%)",
+          width: "100%", maxWidth: 430,
+          background: theme.navBg, backdropFilter: "blur(20px)",
+          borderTop: `1px solid ${theme.border}`,
+          display: "flex", padding: "8px 0 20px",
+          transition: "background 0.3s, border-color 0.3s",
+        }}>
+          {tabs.map(t => (
+            <button key={t.id} onClick={() => setActive(t.id)} style={{
+              flex: 1, display: "flex", flexDirection: "column", alignItems: "center",
+              gap: 4, background: "none", border: "none", cursor: "pointer",
+              color: active === t.id ? theme.accent : theme.muted, transition: "color 0.2s",
+            }}>
+              <span style={{ fontSize: t.id === "scan" ? 28 : 20, lineHeight: 1 }}>{t.icon}</span>
+              <span style={{ fontSize: 10, fontFamily: "'Space Mono', monospace", fontWeight: 700, letterSpacing: 0.5 }}>{t.label}</span>
+            </button>
+          ))}
+        </div>
+      );
+    }
+
+    function BudgetRing({ pct, color, size = 56 }) {
+      const theme = useContext(ThemeContext);
+      const r = (size - 6) / 2;
+      const circ = 2 * Math.PI * r;
+      const dash = circ * Math.min(pct, 1);
+      return (
+        <svg width={size} height={size} style={{ transform: "rotate(-90deg)" }}>
+          <circle cx={size/2} cy={size/2} r={r} fill="none" stroke={theme.border} strokeWidth={5} />
+          <circle cx={size/2} cy={size/2} r={r} fill="none" stroke={color} strokeWidth={5} strokeDasharray={`${dash} ${circ}`} strokeLinecap="round" />
+        </svg>
+      );
+    }
+
+    function CategoryCard({ id, data }) {
+      const theme = useContext(ThemeContext);
+      const cat = categories[id];
+      const pct = data.spent / data.limit;
+      const remaining = data.limit - data.spent;
+      const color = pct > 0.85 ? theme.red : pct > 0.65 ? theme.amber : cat.color;
+      return (
+        <div style={{ background: theme.card, borderRadius: 16, padding: "14px 16px", border: `1px solid ${theme.border}`, display: "flex", alignItems: "center", gap: 14, transition: "background 0.3s" }}>
+          <div style={{ position: "relative", flexShrink: 0 }}>
+            <BudgetRing pct={pct} color={color} size={52} />
+            <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16 }}>{cat.icon}</div>
+          </div>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontFamily: "'Space Mono', monospace", fontSize: 12, color: theme.muted, marginBottom: 2 }}>{cat.label}</div>
+            <div style={{ color: theme.text, fontWeight: 700, fontSize: 15 }}>
+              ${data.spent} <span style={{ color: theme.muted, fontWeight: 400 }}>/ ${data.limit}</span>
+            </div>
+          </div>
+          <div style={{ background: pct > 0.85 ? theme.redSoft : theme.accentSoft, color: pct > 0.85 ? theme.red : theme.accent, borderRadius: 8, padding: "4px 10px", fontFamily: "'Space Mono', monospace", fontSize: 11, fontWeight: 700 }}>${remaining} left</div>
+        </div>
+      );
+    }
+
+    // ─── SCREENS ─────────────────────────────────────────────────────────────
+    function DashboardScreen({ darkMode, onToggle }) {
+      const theme = useContext(ThemeContext);
+      const totalBudget = Object.values(initialBudgets).reduce((a, b) => a + b.limit, 0);
+      const totalSpent  = Object.values(initialBudgets).reduce((a, b) => a + b.spent, 0);
+      const pct = totalSpent / totalBudget;
+      return (
+        <div style={{ paddingBottom: 100 }}>
+          <div style={{ padding: "24px 20px 0" }}>
+            <Logo darkMode={darkMode} onToggle={onToggle} />
+            <div style={{ marginTop: 24, marginBottom: 4 }}>
+              <div style={{ fontFamily: "'Space Mono', monospace", fontSize: 11, color: theme.muted, letterSpacing: 1, textTransform: "uppercase" }}>March 2026 · 4 days left</div>
+            </div>
+            <div style={{ fontSize: 42, fontWeight: 900, color: theme.text, letterSpacing: -2, lineHeight: 1.1 }}>
+              ${totalSpent.toLocaleString()}<span style={{ color: theme.muted, fontSize: 20, fontWeight: 400 }}> / ${totalBudget}</span>
+            </div>
+            <div style={{ marginTop: 10, height: 6, borderRadius: 99, background: theme.border, overflow: "hidden" }}>
+              <div style={{ height: "100%", borderRadius: 99, width: `${Math.min(pct*100,100)}%`, background: pct > 0.85 ? theme.red : theme.accent, transition: "width 0.8s ease" }} />
+            </div>
+            <div style={{ marginTop: 6, display: "flex", justifyContent: "space-between" }}>
+              <span style={{ fontFamily: "'Space Mono', monospace", fontSize: 11, color: theme.accent }}>{Math.round(pct * 100)}% used</span>
+              <span style={{ fontFamily: "'Space Mono', monospace", fontSize: 11, color: theme.muted }}>${totalBudget - totalSpent} remaining</span>
+            </div>
+          </div>
+          <div style={{ margin: "20px 20px 0", padding: "12px 16px", borderRadius: 14, background: theme.amberSoft, border: `1px solid ${theme.amber}33`, display: "flex", gap: 10, alignItems: "flex-start" }}>
+            <span style={{ fontSize: 18 }}>⚡</span>
+            <div>
+              <div style={{ fontFamily: "'Space Mono', monospace", fontSize: 11, color: theme.amber, fontWeight: 700 }}>PATTERN DETECTED</div>
+              <div style={{ color: theme.text, fontSize: 13, marginTop: 2 }}>Your dining spend is 79% gone with 12 days left. Might wanna cook this week. 👩‍🍳</div>
+            </div>
+          </div>
+          <div style={{ padding: "20px 20px 0" }}>
+            <div style={{ fontFamily: "'Space Mono', monospace", fontSize: 11, color: theme.muted, letterSpacing: 1, textTransform: "uppercase", marginBottom: 12 }}>By Category</div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              {Object.entries(initialBudgets).map(([id, data]) => <CategoryCard key={id} id={id} data={data} />)}
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    function ScanScreen() {
+      const theme = useContext(ThemeContext);
+      const [phase, setPhase] = useState("idle");
+      const [scenario, setScenario] = useState(null);
+      const [scenarioIdx, setScenarioIdx] = useState(0);
+      const doScan = () => {
+        setPhase("scanning");
+        setTimeout(() => { setScenario(scanScenarios[scenarioIdx % scanScenarios.length]); setScenarioIdx(i => i+1); setPhase("result"); }, 1800);
+      };
+      const verdictConfig = {
+        buy:   { label: "Go for it! ✓", bg: theme.accentSoft, color: theme.accent, border: theme.accent },
+        maybe: { label: "Your call 🤔",  bg: theme.amberSoft,  color: theme.amber,  border: theme.amber  },
+        skip:  { label: "Skip it ✗",    bg: theme.redSoft,    color: theme.red,    border: theme.red    },
+      };
+      if (phase === "result" && scenario) {
+        const v = verdictConfig[scenario.verdict];
+        const budgetData = initialBudgets[scenario.category];
+        const newSpent = budgetData.spent + scenario.price;
+        const wouldExceed = newSpent > budgetData.limit;
+        return (
+          <div style={{ padding: "24px 20px", paddingBottom: 100 }}>
+            <button onClick={() => setPhase("idle")} style={{ background: "none", border: "none", color: theme.muted, cursor: "pointer", fontFamily: "'Space Mono', monospace", fontSize: 12, marginBottom: 16, padding: 0 }}>← scan another</button>
+            <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 20 }}>
+              <div style={{ fontSize: 48 }}>{scenario.image}</div>
+              <div>
+                <div style={{ fontFamily: "'Space Mono', monospace", fontSize: 11, color: theme.muted, textTransform: "uppercase", letterSpacing: 1 }}>{categories[scenario.category].label}</div>
+                <div style={{ color: theme.text, fontWeight: 800, fontSize: 20, letterSpacing: -0.5 }}>{scenario.item}</div>
+                <div style={{ color: theme.accent, fontWeight: 700, fontSize: 24 }}>${scenario.price}</div>
+              </div>
+            </div>
+            <div style={{ border: `2px solid ${v.border}`, background: v.bg, borderRadius: 12, padding: "12px 16px", marginBottom: 16, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <span style={{ color: v.color, fontFamily: "'Space Mono', monospace", fontWeight: 700, fontSize: 16 }}>{v.label}</span>
+              <span style={{ color: v.color, fontSize: 13 }}>{categories[scenario.category].icon} {categories[scenario.category].label}</span>
+            </div>
+            <div style={{ background: theme.card, borderRadius: 14, padding: "14px 16px", border: `1px solid ${theme.border}`, marginBottom: 16 }}>
+              <div style={{ fontFamily: "'Space Mono', monospace", fontSize: 11, color: theme.muted, textTransform: "uppercase", letterSpacing: 1, marginBottom: 10 }}>Budget Impact</div>
+              {[["Current spent", `$${budgetData.spent}`, theme.text], ["After purchase", `$${newSpent}`, wouldExceed ? theme.red : theme.text], ["Budget limit", `$${budgetData.limit}`, theme.text]].map(([label, val, color]) => (
+                <div key={label} style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
+                  <span style={{ color: theme.muted, fontSize: 13 }}>{label}</span>
+                  <span style={{ color, fontWeight: 700 }}>{val}</span>
+                </div>
+              ))}
+              {wouldExceed && <div style={{ marginTop: 10, padding: "8px 12px", background: theme.redSoft, borderRadius: 8, color: theme.red, fontSize: 12, fontFamily: "'Space Mono', monospace" }}>⚠ Over budget by ${(newSpent - budgetData.limit).toFixed(0)}</div>}
+            </div>
+            <div style={{ background: theme.card, borderRadius: 14, padding: "14px 16px", border: `1px solid ${theme.border}`, marginBottom: 16 }}>
+              <div style={{ fontFamily: "'Space Mono', monospace", fontSize: 11, color: theme.accent, textTransform: "uppercase", letterSpacing: 1, marginBottom: 8 }}>SaveGap says</div>
+              <div style={{ color: theme.text, fontSize: 14, lineHeight: 1.6 }}>{scenario.advice}</div>
+            </div>
+            {scenario.alternatives.length > 0 && (
+              <div>
+                <div style={{ fontFamily: "'Space Mono', monospace", fontSize: 11, color: theme.muted, textTransform: "uppercase", letterSpacing: 1, marginBottom: 10 }}>Better Alternatives</div>
+                {scenario.alternatives.map((alt, i) => (
+                  <div key={i} style={{ background: theme.card, borderRadius: 12, padding: "12px 14px", border: `1px solid ${theme.border}`, marginBottom: 8, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <div><div style={{ color: theme.text, fontWeight: 600, fontSize: 14 }}>{alt.name}</div><div style={{ color: theme.muted, fontSize: 12 }}>{alt.where}</div></div>
+                    <div style={{ color: theme.accent, fontWeight: 800, fontSize: 16 }}>${alt.price}</div>
+                  </div>
+                ))}
+                <div style={{ fontFamily: "'Space Mono', monospace", fontSize: 10, color: theme.muted, marginTop: 4 }}>Save up to ${scenario.price - Math.min(...scenario.alternatives.map(a => a.price))} vs original</div>
+              </div>
+            )}
+          </div>
+        );
+      }
+      return (
+        <div style={{ padding: "24px 20px", paddingBottom: 100 }}>
+          <div style={{ fontFamily: "'Space Mono', monospace", fontSize: 22, fontWeight: 700, color: theme.text, letterSpacing: -1, marginBottom: 4 }}>Scan Item</div>
+          <div style={{ color: theme.muted, fontSize: 14, marginBottom: 24 }}>Point your camera at a price tag or barcode</div>
+          <div onClick={doScan} style={{ height: 280, borderRadius: 20, border: `2px dashed ${phase === "scanning" ? theme.accent : theme.border}`, background: theme.card, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", cursor: "pointer", position: "relative", overflow: "hidden", transition: "border-color 0.3s" }}>
+            {phase === "scanning" ? (
+              <>
+                <style>{`@keyframes scanline{0%{top:0}100%{top:100%}}@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.4}}`}</style>
+                <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 3, background: `linear-gradient(90deg,transparent,${theme.accent},transparent)`, animation: "scanline 1.5s ease-in-out infinite" }} />
+                <div style={{ fontSize: 40, animation: "pulse 1s infinite" }}>🔍</div>
+                <div style={{ fontFamily: "'Space Mono', monospace", color: theme.accent, fontSize: 13, marginTop: 12 }}>Scanning...</div>
+              </>
+            ) : (
+              <>
+                <div style={{ width: 60, height: 60, borderRadius: "50%", background: theme.accentSoft, border: `2px solid ${theme.accent}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 26, marginBottom: 14 }}>📷</div>
+                <div style={{ color: theme.text, fontWeight: 700, fontSize: 16 }}>Tap to scan</div>
+                <div style={{ color: theme.muted, fontSize: 12, marginTop: 4 }}>Price tag, barcode, or product label</div>
+              </>
+            )}
+            {["top:12px,left:12px","top:12px,right:12px","bottom:12px,left:12px","bottom:12px,right:12px"].map((pos, i) => {
+              const p = Object.fromEntries(pos.split(",").map(s => s.split(":")));
+              return <div key={i} style={{ position: "absolute", width: 20, height: 20, ...p, borderTop: p.top ? `2px solid ${theme.accent}` : "none", borderBottom: p.bottom ? `2px solid ${theme.accent}` : "none", borderLeft: p.left ? `2px solid ${theme.accent}` : "none", borderRight: p.right ? `2px solid ${theme.accent}` : "none" }} />;
+            })}
+          </div>
+          <div style={{ marginTop: 20 }}>
+            <div style={{ fontFamily: "'Space Mono', monospace", fontSize: 11, color: theme.muted, letterSpacing: 1, textTransform: "uppercase", marginBottom: 10 }}>Try a demo scan:</div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {scanScenarios.map((s, i) => (
+                <button key={i} onClick={() => { setScenario(s); setPhase("result"); }} style={{ background: theme.card, border: `1px solid ${theme.border}`, borderRadius: 12, padding: "12px 14px", cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center", color: theme.text }}>
+                  <span style={{ fontSize: 18 }}>{s.image}</span>
+                  <span style={{ flex: 1, textAlign: "left", marginLeft: 10, fontSize: 14, fontWeight: 600 }}>{s.item}</span>
+                  <span style={{ color: theme.accent, fontWeight: 700 }}>${s.price}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+          <div style={{ marginTop: 20, padding: "16px", background: theme.card, borderRadius: 14, border: `1px solid ${theme.border}`, display: "flex", gap: 12, alignItems: "center" }}>
+            <div style={{ width: 42, height: 42, borderRadius: 10, background: theme.accentSoft, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, flexShrink: 0 }}>🧾</div>
+            <div><div style={{ color: theme.text, fontWeight: 700, fontSize: 14 }}>Upload a receipt</div><div style={{ color: theme.muted, fontSize: 12 }}>Snap or upload to auto-update your budget</div></div>
+            <div style={{ marginLeft: "auto", color: theme.accent, fontSize: 20 }}>→</div>
+          </div>
+        </div>
+      );
+    }
+
+    function HistoryScreen() {
+      const theme = useContext(ThemeContext);
+      return (
+        <div style={{ padding: "24px 20px", paddingBottom: 100 }}>
+          <div style={{ fontFamily: "'Space Mono', monospace", fontSize: 22, fontWeight: 700, color: theme.text, letterSpacing: -1, marginBottom: 4 }}>History</div>
+          <div style={{ color: theme.muted, fontSize: 14, marginBottom: 24 }}>Your recent purchases, auto-categorized</div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {mockTransactions.map(tx => {
+              const cat = categories[tx.cat];
+              return (
+                <div key={tx.id} style={{ background: theme.card, borderRadius: 14, padding: "14px 16px", border: `1px solid ${theme.border}`, display: "flex", alignItems: "center", gap: 12 }}>
+                  <div style={{ width: 40, height: 40, borderRadius: 10, background: `${cat.color}18`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, flexShrink: 0 }}>{cat.icon}</div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ color: theme.text, fontWeight: 600, fontSize: 14 }}>{tx.item}</div>
+                    <div style={{ color: theme.muted, fontSize: 12 }}>{tx.store} · {tx.date}</div>
+                  </div>
+                  <div style={{ textAlign: "right" }}>
+                    <div style={{ color: theme.text, fontWeight: 700, fontSize: 15 }}>-${tx.amount}</div>
+                    <div style={{ fontFamily: "'Space Mono', monospace", fontSize: 9, color: cat.color, textTransform: "uppercase" }}>{cat.label}</div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          <div style={{ marginTop: 20, padding: "14px 16px", background: theme.card, borderRadius: 14, border: `1px solid ${theme.border}` }}>
+            <div style={{ fontFamily: "'Space Mono', monospace", fontSize: 11, color: theme.muted, textTransform: "uppercase", letterSpacing: 1, marginBottom: 10 }}>This month so far</div>
+            <div style={{ display: "flex", justifyContent: "space-between" }}>
+              {[["24","transactions"],["$576","total spent"]].map(([val,label]) => (
+                <div key={label} style={{ textAlign: "center" }}>
+                  <div style={{ fontSize: 22, fontWeight: 800, color: theme.text }}>{val}</div>
+                  <div style={{ fontFamily: "'Space Mono', monospace", fontSize: 10, color: theme.muted }}>{label}</div>
+                </div>
+              ))}
+              <div style={{ textAlign: "center" }}>
+                <div style={{ fontSize: 22, fontWeight: 800, color: theme.accent }}>6</div>
+                <div style={{ fontFamily: "'Space Mono', monospace", fontSize: 10, color: theme.muted }}>categories</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    function InsightsScreen() {
+      const theme = useContext(ThemeContext);
+      return (
+        <div style={{ padding: "24px 20px", paddingBottom: 100 }}>
+          <div style={{ fontFamily: "'Space Mono', monospace", fontSize: 22, fontWeight: 700, color: theme.text, letterSpacing: -1, marginBottom: 4 }}>Insights</div>
+          <div style={{ color: theme.muted, fontSize: 14, marginBottom: 24 }}>Patterns SaveGap spotted this month</div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+            {patternAlerts.map(alert => {
+              const cfg = {
+                warn:  { bg: theme.amberSoft, border: `${theme.amber}44`, label: "⚠ Watch out", labelColor: theme.amber  },
+                alert: { bg: theme.redSoft,   border: `${theme.red}44`,   label: "🔴 Heads up",  labelColor: theme.red    },
+                good:  { bg: theme.accentSoft,border: `${theme.accent}44`,label: "✓ Nice work",  labelColor: theme.accent },
+              }[alert.severity];
+              return (
+                <div key={alert.id} style={{ background: cfg.bg, borderRadius: 16, padding: "16px", border: `1px solid ${cfg.border}` }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+                    <span style={{ fontSize: 22 }}>{alert.icon}</span>
+                    <span style={{ fontFamily: "'Space Mono', monospace", fontSize: 11, color: cfg.labelColor, fontWeight: 700 }}>{cfg.label}</span>
+                  </div>
+                  <div style={{ color: theme.text, fontWeight: 700, fontSize: 15, marginBottom: 6 }}>{alert.title}</div>
+                  <div style={{ color: theme.text, fontSize: 13, lineHeight: 1.6, opacity: 0.85 }}>{alert.body}</div>
+                </div>
+              );
+            })}
+          </div>
+          <div style={{ marginTop: 24, background: theme.card, borderRadius: 16, padding: "16px", border: `1px solid ${theme.border}` }}>
+            <div style={{ fontFamily: "'Space Mono', monospace", fontSize: 11, color: theme.muted, textTransform: "uppercase", letterSpacing: 1, marginBottom: 14 }}>Weekly Spend — March</div>
+            <div style={{ display: "flex", gap: 8, alignItems: "flex-end", height: 80 }}>
+              {[{label:"W1",val:120},{label:"W2",val:185},{label:"W3",val:98},{label:"W4*",val:173}].map((w, i) => {
+                const h = (w.val / 200) * 70;
+                const isLast = i === 3;
+                return (
+                  <div key={i} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 6 }}>
+                    <div style={{ fontFamily: "'Space Mono', monospace", fontSize: 10, color: isLast ? theme.accent : theme.muted }}>${w.val}</div>
+                    <div style={{ width: "100%", height: h, borderRadius: "6px 6px 0 0", background: isLast ? theme.accent : theme.subtle }} />
+                    <div style={{ fontFamily: "'Space Mono', monospace", fontSize: 10, color: isLast ? theme.accent : theme.muted }}>{w.label}</div>
+                  </div>
+                );
+              })}
+            </div>
+            <div style={{ fontFamily: "'Space Mono', monospace", fontSize: 10, color: theme.muted, marginTop: 8 }}>* current week, 4 days left</div>
+          </div>
+          <div style={{ marginTop: 14, background: theme.accentSoft, borderRadius: 16, padding: "16px", border: `1px solid ${theme.accent}44`, display: "flex", gap: 14, alignItems: "center" }}>
+            <div style={{ fontSize: 36 }}>💰</div>
+            <div>
+              <div style={{ fontFamily: "'Space Mono', monospace", fontSize: 11, color: theme.accent, fontWeight: 700, textTransform: "uppercase" }}>SaveGap Savings Est.</div>
+              <div style={{ color: theme.text, fontWeight: 800, fontSize: 24 }}>$247 saved</div>
+              <div style={{ color: theme.muted, fontSize: 12 }}>vs. your habits before SaveGap · last 60 days</div>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // ─── APP ─────────────────────────────────────────────────────────────────
+    function App() {
+      const [screen, setScreen]   = useState("dashboard");
+      const [darkMode, setDarkMode] = useState(true);
+      const theme = darkMode ? darkTheme : lightTheme;
+
+      const screens = {
+        dashboard: <DashboardScreen darkMode={darkMode} onToggle={() => setDarkMode(d => !d)} />,
+        scan:      <ScanScreen />,
+        history:   <HistoryScreen />,
+        insights:  <InsightsScreen />,
+      };
+
+      return (
+        <ThemeContext.Provider value={theme}>
+          <style>{`
+            @import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;600;700;800;900&display=swap');
+            *{box-sizing:border-box;margin:0;padding:0;}
+            body{background:${theme.bg};font-family:'Syne',sans-serif;transition:background 0.3s;}
+            ::-webkit-scrollbar{width:0;}
+          `}</style>
+          <div style={{ maxWidth: 430, margin: "0 auto", minHeight: "100vh", background: theme.bg, color: theme.text, position: "relative", overflow: "hidden", transition: "background 0.3s, color 0.3s" }}>
+            <div style={{ overflowY: "auto", height: "100vh", paddingTop: 8 }}>
+              {screens[screen]}
+            </div>
+            <BottomNav active={screen} setActive={setScreen} />
+          </div>
+        </ThemeContext.Provider>
+      );
+    }
+
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<App />);
+  </script>
+</body>
+</html>
